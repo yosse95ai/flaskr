@@ -144,6 +144,51 @@ class TestFlaskr:
             # the database state is not guaranteed. In a real-world scenario,
             # you might want to set up a known database state before running this test.
 
+    def test_remove_entry_unauthorized(self):
+        """
+        Test that unauthorized users cannot remove entries.
+        """
+        with app.test_client() as client:
+            # Try to remove an entry without being logged in
+            response = client.post('/remove/1', follow_redirects=True)
+            
+            # Should get a 401 Unauthorized response
+            assert response.status_code == 401
+
+    def test_remove_entry_authorized(self):
+        """
+        Test that authorized users can remove entries.
+        """
+        with app.test_client() as client:
+            # First, log in
+            client.post('/login', data={
+                'username': app.config['USERNAME'],
+                'password': app.config['PASSWORD']
+            })
+            
+            # Add an entry to ensure we have something to delete
+            client.post('/add', data={
+                'title': 'Test Entry',
+                'text': 'This is a test entry to be deleted.'
+            })
+            
+            # Get the entries to find the ID of the one we just added
+            with app.app_context():
+                db = get_db()
+                entry = db.execute('SELECT id FROM entries WHERE title = ?', 
+                                  ['Test Entry']).fetchone()
+                
+                # Now remove the entry
+                response = client.post(f'/remove/{entry["id"]}', follow_redirects=True)
+                
+                # Check if the response indicates success
+                assert response.status_code == 200
+                assert b'Entry was successfully deleted' in response.data
+                
+                # Verify the entry was actually deleted
+                remaining = db.execute('SELECT * FROM entries WHERE id = ?', 
+                                      [entry["id"]]).fetchone()
+                assert remaining is None
 
 
 class AuthActions(object):
